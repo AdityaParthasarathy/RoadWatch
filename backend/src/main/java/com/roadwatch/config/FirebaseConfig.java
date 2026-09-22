@@ -10,35 +10,51 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import org.springframework.beans.factory.annotation.Value;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Base64;
 
 @Configuration
 public class FirebaseConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(FirebaseConfig.class);
 
+    @Value("${FIREBASE_SERVICE_ACCOUNT_BASE64:}")
+    private String serviceAccountBase64;
+
     /**
      * Attempts to initialize Firebase and return a Firestore instance.
      *
-     * Returns NULL if:
-     *   - service-account.json is missing from resources
-     *   - Credentials are invalid
-     *   - Network is unreachable during init
+     * Credentials are loaded, in order of preference:
+     *   1. FIREBASE_SERVICE_ACCOUNT_BASE64 env var (base64-encoded JSON) — used in production
+     *      so the real credential file never has to be committed to git.
+     *   2. service-account.json on the classpath — used for local dev.
      *
-     * RoadIssueService uses @Autowired(required = false) to handle the null case
-     * and falls back to in-memory storage automatically.
+     * Returns NULL if neither is available, credentials are invalid, or the network
+     * is unreachable during init. RoadIssueService uses @Autowired(required = false)
+     * to handle the null case and falls back to in-memory storage automatically.
      */
     @Bean
     public Firestore firestore() {
         try {
-            InputStream serviceAccount = getClass()
-                    .getClassLoader()
-                    .getResourceAsStream("service-account.json");
+            InputStream serviceAccount;
+
+            if (!serviceAccountBase64.isBlank()) {
+                byte[] decoded = Base64.getDecoder().decode(serviceAccountBase64.trim());
+                serviceAccount = new ByteArrayInputStream(decoded);
+                logger.info("Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT_BASE64.");
+            } else {
+                serviceAccount = getClass()
+                        .getClassLoader()
+                        .getResourceAsStream("service-account.json");
+            }
 
             if (serviceAccount == null) {
                 logger.warn("========================================================");
-                logger.warn("  service-account.json NOT FOUND in resources.");
+                logger.warn("  No Firebase credentials found (env var or resources).");
                 logger.warn("  Firestore is DISABLED. Using in-memory fallback.");
                 logger.warn("========================================================");
                 return null;
