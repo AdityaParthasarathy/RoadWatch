@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+backend/target/
+ai_service/__pycache__/
+**/__pycache__/
+*.pyc
+
+# Secrets — never commit these
+backend/src/main/resources/service-account.json
+frontend/.env
+frontend/.env.local
+.env
+
+# Editor/OS
+.vscode/
+.DS_Store
+
+# Logs
+*.log
